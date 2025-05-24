@@ -54,19 +54,18 @@ async def status_command(client: Client, message: Message):
     served_chats = await chatsdb.count_documents({})
 
     text = (
-        f"<b>🤖 Bot Status</b>
+        f"<b>🤖 Bot Status</b>"
 
-"
-        f"👥 Users: <code>{served_users}</code>
-"
-        f"👨‍👩‍👧‍👦 Chats: <code>{served_chats}</code>
-"
-        f"⚙️ Platform: <code>{platform.system()} {platform.release()}</code>
-"
-        f"📦 Python: <code>{platform.python_version()}</code>
-"
-        f"⏱ Uptime: <code>{uptime}</code>
-"
+        f"👥 Users: <code>{served_users}</code>"
+
+        f"👨‍👩‍👧‍👦 Chats: <code>{served_chats}</code>"
+
+        f"⚙️ Platform: <code>{platform.system()} {platform.release()}</code>"
+
+        f"📦 Python: <code>{platform.python_version()}</code>"
+
+        f"⏱ Uptime: <code>{uptime}</code>"
+
         f"🧠 Memory Usage: <code>{psutil.virtual_memory().percent}%</code>"
     )
 
