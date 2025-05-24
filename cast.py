@@ -66,7 +66,7 @@ async def bot_status(_, message: Message):
 
 
 # ==== RESTART ====
-@app.on_message(filters.command("restart") & sudo_admin_filter)
+@app.on_message(filters.command("renew") & sudo_admin_filter)
 async def restart_bot(_, message: Message):
     await message.reply("♻️ Restarting...")
 
