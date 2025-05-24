@@ -26,7 +26,7 @@ mongodb = mongo_client.deadline
 usersdb = mongodb.tgusersdb
 chatsdb = mongodb.chats
 
-ALLOWED_ADMINS = ["7765692814", "6848223695", "5350261891"]
+ALLOWED_ADMINS = [7765692814, 6848223695, 5350261891]
 sudo_filter = filters.user(ALLOWED_ADMINS)
 
 async def get_served_users():
