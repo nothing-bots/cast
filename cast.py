@@ -26,14 +26,9 @@ mongodb = mongo_client.deadline
 usersdb = mongodb.tgusersdb
 chatsdb = mongodb.chats
 
-# ==== ADMINS ====
-OWNER_ID = 
-OWNER_ID2 = 6848223695
-SECOND_OWNER_ID = 
 ALLOWED_ADMINS = ["7765692814", "6848223695", "5350261891"]
 sudo_filter = filters.user(ALLOWED_ADMINS)
 
-# ==== HELPERS ====
 async def get_served_users():
     return [user async for user in usersdb.find({"user_id": {"$gt": 0}})]
 
@@ -43,7 +38,6 @@ async def get_served_chats():
 def get_readable_time(seconds: int) -> str:
     return time.strftime('%Hh:%Mm:%Ss', time.gmtime(seconds))
 
-# ==== STATUS ====
 @app.on_message(filters.command("status") & sudo_filter)
 async def status_command(client: Client, message: Message):
     uptime = get_readable_time(time.time() - psutil.boot_time())
@@ -61,7 +55,6 @@ async def status_command(client: Client, message: Message):
         f"🧠 Memory Usage: <code>{mem.percent}%</code>"
     )
 
-# ==== RESTART ====
 @app.on_message(filters.command("renew") & sudo_filter)
 async def restart_bot(client: Client, message: Message):
     await message.reply_text("♻️ Restarting bot...")
@@ -69,7 +62,7 @@ async def restart_bot(client: Client, message: Message):
     await asyncio.sleep(2)
     os.execv(sys.executable, [sys.executable, "-m", "cast"])
 
-# ==== SHUTDOWN ====
+
 @app.on_message(filters.command("shutdown") & sudo_filter)
 async def shutdown_bot(client: Client, message: Message):
     await message.reply_text("⚠️ Shutting down bot...")
@@ -77,13 +70,12 @@ async def shutdown_bot(client: Client, message: Message):
     await asyncio.sleep(2)
     os._exit(0)
 
-# ==== BROADCAST ====
 @app.on_message(filters.command("broadcast") & sudo_filter)
 async def broadcast_command(client: Client, message: Message):
     args = message.text.lower()
     mode = "forward" if "-forward" in args else "copy"
+    start_time = time.time()
 
-    # Targets
     users, chats = [], []
     if "-all" in args:
         users = [u["user_id"] for u in await get_served_users()]
@@ -95,19 +87,13 @@ async def broadcast_command(client: Client, message: Message):
     else:
         return await message.reply("Use -all, -users, or -chats")
 
-    content = message.reply_to_message
-    if not content and len(args.split()) > 1:
-        content = args.replace("/broadcast", "").replace("-forward", "").replace("-all", "").replace("-users", "").replace("-chats", "").strip()
-        if not content:
-            return await message.reply("Reply to a message or provide text.")
-    elif not content:
+    content = message.reply_to_message or args.replace("/broadcast", "").replace("-forward", "").replace("-all", "").replace("-users", "").replace("-chats", "").strip()
+    if not content:
         return await message.reply("Reply to a message or provide text.")
 
     total = len(users) + len(chats)
     status_msg = await message.reply("🚀 Broadcast started...")
     sent = failed = 0
-
-    await client.send_message(LOGGER_GROUP_ID, f"📢 <b>Broadcast Started</b>\nBy: <a href='tg://user?id={message.from_user.id}'>{message.from_user.first_name}</a>\nMode: <code>{mode}</code>\nTargets: <code>{total}</code>")
 
     async def send(chat_id):
         nonlocal sent, failed
@@ -128,23 +114,28 @@ async def broadcast_command(client: Client, message: Message):
         failed += 1
 
     async def batch_send(targets):
-        for i in range(0, len(targets), 100):
-            batch = targets[i:i + 100]
+        for i in range(0, len(targets), 50):  # Reduced batch size
+            batch = targets[i:i + 50]
             await asyncio.gather(*(send(cid) for cid in batch))
-            await asyncio.sleep(2)
+            await asyncio.sleep(2.5)  # Custom split delay
             percent = round((sent + failed) / total * 100, 2)
             await status_msg.edit_text(f"<b>📡 Progress</b>\nSent: {sent} | Failed: {failed}\nDone: {percent}%")
 
     await batch_send(users + chats)
+
+    end_time = time.time()
+    duration = round(end_time - start_time, 2)
 
     await status_msg.edit_text(
         f"<b>✅ Broadcast Complete</b>\n\n"
         f"Mode: <code>{mode}</code>\n"
         f"Total: <code>{total}</code>\n"
         f"✅ Sent: <code>{sent}</code>\n"
-        f"❌ Failed: <code>{failed}</code>"
+        f"❌ Failed: <code>{failed}</code>\n"
+        f"⏱ Duration: <code>{duration}s</code>"
     )
-# ==== RUN ====
+
+
 if __name__ == "__main__":
     print(">> Starting Bot...")
     app.run()
