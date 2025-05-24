@@ -94,19 +94,15 @@ async def broadcast_log(client: Client, message: Message):
     lines = []
     for i, log in enumerate(logs, 1):
         lines.append(
-            f"<b>{i}. {log['sender_name']}</b>
-"
-            f"🗓 {log['timestamp']}
-"
-            f"✅ Sent: <code>{log['sent']}</code> | ❌ Failed: <code>{log['failed']}</code>
-"
-            f"⏱ Duration: <code>{log['duration']}s</code>
-"
-            f"📣 Mode: <code>{log['mode']}</code>"
+            f"<b>{i}. {log['sender_name']}</b>\n"
+            f"🗓 {log['timestamp']}\n"
+            f"✅ Sent: <code>{log['sent']}</code> | ❌ Failed: <code>{log['failed']}</code>\n"
+            f"⏱ Duration: <code>{log['duration']}s</code>\n"
+            f"📣 Mode: <code>{log['mode']}</code>\n"
         )
-    await message.reply_text("
 
-".join(lines))
+    await message.reply_text("\n".join(lines), disable_web_page_preview=True)
+
 
 @app.on_message(filters.command("broadcast") & sudo_admin_filter)
 async def broadcast_command(client: Client, message: Message):
@@ -177,15 +173,14 @@ async def broadcast_command(client: Client, message: Message):
             eta = (time.time() - start_time) / (sent + failed) * (total - (sent + failed)) if (sent + failed) else 0
             bar = f"[{'█' * int(percent // 5)}{'░' * (20 - int(percent // 5))}]"
             await status_msg.edit_text(
-                f"<b>📡 Broadcast Progress</b>
+                f"<b>📡 Broadcast Progress</b>"
 
-"
-                f"{bar} <code>{percent}%</code>
-"
-                f"✅ Sent: <code>{sent}</code>
-"
-                f"❌ Failed: <code>{failed}</code>
-"
+                f"{bar} <code>{percent}%</code>"
+
+                f"✅ Sent: <code>{sent}</code>"
+
+                f"❌ Failed: <code>{failed}</code>"
+
                 f"⏱ ETA: <code>{int(eta)}s</code>"
             )
 
@@ -193,19 +188,18 @@ async def broadcast_command(client: Client, message: Message):
 
     end = time.time() - start_time
     await status_msg.edit_text(
-        f"<b>✅ Broadcast Complete</b>
+        f"<b>✅ Broadcast Complete</b>"
 
-"
-        f"Mode: <code>{mode}</code>
-"
-        f"Sent: <code>{sent}</code>
-"
-        f"Failed: <code>{failed}</code>
-"
-        f"Users: <code>{sent_users}</code>
-"
-        f"Chats: <code>{sent_chats}</code>
-"
+        f"Mode: <code>{mode}</code>"
+
+        f"Sent: <code>{sent}</code>"
+
+        f"Failed: <code>{failed}</code>"
+
+        f"Users: <code>{sent_users}</code>"
+
+        f"Chats: <code>{sent_chats}</code>"
+
         f"Duration: <code>{int(end)}s</code>"
     )
 
