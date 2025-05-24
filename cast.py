@@ -46,52 +46,46 @@ def get_readable_time(seconds: int) -> str:
 
 # ==== STATUS ====
 @app.on_message(filters.command("status") & sudo_admin_filter)
-async def bot_status(_, message: Message):
-    current_time = time.time()
-    uptime = get_readable_time(int(current_time - START_TIME))
-    memory = psutil.virtual_memory()
-    cpu = psutil.cpu_percent()
+async def status_command(client: Client, message: Message):
+    uptime = time.time() - psutil.boot_time()
+    hours, rem = divmod(uptime, 3600)
+    minutes, seconds = divmod(rem, 60)
 
-    users = await get_served_users()
-    chats = await get_served_chats()
+    served_users = await usersdb.count_documents({})
+    served_chats = await chatsdb.count_documents({})
 
-    await message.reply_text(
-        f"🔧 <b>Bot Status</b>\n\n"
-        f"⏱ Uptime: <code>{uptime}</code>\n"
-        f"👤 Served Users: <code>{len(users)}</code>\n"
-        f"💬 Served Chats: <code>{len(chats)}</code>\n"
-        f"💾 RAM Usage: <code>{memory.percent}%</code>\n"
-        f"⚙ CPU Usage: <code>{cpu}%</code>"
+    text = (
+        f"<b>🤖 Bot Status</b>\n\n"
+        f"🖥 Host Uptime: <code>{int(hours)}h {int(minutes)}m</code>\n"
+        f"👥 Users: <code>{served_users}</code>\n"
+        f"👨‍👩‍👧‍👦 Chats: <code>{served_chats}</code>\n"
+        f"⚙️ Platform: <code>{platform.system()} {platform.release()}</code>\n"
+        f"📦 Python: <code>{platform.python_version()}</code>\n"
+        f"🧠 Memory Usage: <code>{psutil.virtual_memory().percent}%</code>"
     )
+
+    await message.reply_text(text)
 
 
 # ==== RESTART ====
 @app.on_message(filters.command("renew") & sudo_admin_filter)
-async def restart_bot(_, message: Message):
-    await message.reply("♻️ Restarting...")
+async def restart_bot(client: Client, message: Message):
+    await message.reply_text("♻️ Restarting bot...")
+    await client.send_message(LOGGER_GROUP_ID, "♻️ Bot is restarting...\n\n<b>🔁 Restart Triggered By:</b> "
+                                               f"<a href='tg://user?id={message.from_user.id}'>{message.from_user.first_name}</a>")
+    await asyncio.sleep(2)
+    os.execv(sys.executable, [sys.executable, "-m", "cast"])
 
-    if LOG_GROUP_ID:
-        try:
-            await app.send_message(LOG_GROUP_ID, "♻️ <b>Bot is restarting...</b>")
-        except Exception:
-            pass
-
-    await app.stop()
-    os.execl(sys.executable, sys.executable, *sys.argv)
 
 # ==== SHUTDOWN ====
 @app.on_message(filters.command("shutdown") & sudo_admin_filter)
-async def shutdown_bot(_, message: Message):
-    await message.reply("🛑 Shutting down...")
+async def shutdown_bot(client: Client, message: Message):
+    await message.reply_text("⚠️ Shutting down bot...")
+    await client.send_message(LOGGER_GROUP_ID, "⚠️ Bot is shutting down...\n\n<b>🚫 Shutdown Triggered By:</b> "
+                                               f"<a href='tg://user?id={message.from_user.id}'>{message.from_user.first_name}</a>")
+    await asyncio.sleep(2)
+    os._exit(0)
 
-    if LOG_GROUP_ID:
-        try:
-            await app.send_message(LOG_GROUP_ID, "🛑 <b>Bot has been shut down!</b>")
-        except Exception:
-            pass
-
-    await app.stop()
-    os.kill(os.getpid(), signal.SIGTERM)
 
 # ==== BROADCAST ====
 @app.on_message(filters.command("broadcast") & sudo_admin_filter)
