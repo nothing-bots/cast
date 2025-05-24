@@ -1,3 +1,4 @@
+import sys
 import platform 
 import os
 import time
@@ -56,10 +57,9 @@ async def status_command(client: Client, message: Message):
 
     text = (
         f"<b>🤖 Bot Status</b>\n\n"
-        f"🖥 Host Uptime: <code>{int(hours)}h {int(minutes)}m</code>\n"
         f"👥 Users: <code>{served_users}</code>\n"
         f"👨‍👩‍👧‍👦 Chats: <code>{served_chats}</code>\n"
-        f"⚙️ Platform: <code>{platform.system()} {platform.release()}</code>\n"
+        f"⚙️ Platform: <code>{platform.system()} {platform.release()}</code>\n\n"
         f"📦 Python: <code>{platform.python_version()}</code>\n"
         f"🧠 Memory Usage: <code>{psutil.virtual_memory().percent}%</code>"
     )
