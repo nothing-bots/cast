@@ -1,25 +1,22 @@
+import os
 import time
 import asyncio
-import os
+import signal
+import psutil
+from dotenv import load_dotenv
+from datetime import datetime
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from pyrogram.errors import FloodWait, RPCError
 from motor.motor_asyncio import AsyncIOMotorClient
-from dotenv import load_dotenv
 
-# ==== LOAD ENV ====
+# ==== ENV ====
 load_dotenv()
-
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 MONGO_DB_URI = os.getenv("MONGO_DB_URI")
-
-# ==== CONSTANTS ====
-REQUEST_LIMIT = 50
-BATCH_SIZE = 500
-BATCH_DELAY = 2
-MAX_RETRIES = 2
+LOG_GROUP_ID = int(os.getenv("LOG_GROUP_ID", 0))
 
 # ==== INIT ====
 app = Client("BroadcastBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
@@ -28,129 +25,168 @@ mongodb = mongo_client.deadline
 usersdb = mongodb.tgusersdb
 chatsdb = mongodb.chats
 
-# ==== DB HELPERS ====
-async def get_served_users() -> list:
-    return [user async for user in usersdb.find({"user_id": {"$gt": 0}})]
-
-async def get_served_chats() -> list:
-    return [chat async for chat in chatsdb.find({"chat_id": {"$lt": 0}})]
-
-
+START_TIME = time.time()
 
 OWNER_ID = 7765692814
 OWNER_ID2 = 6848223695
 SECOND_OWNER_ID = 5350261891
-
-
 ALLOWED_ADMINS = [OWNER_ID, SECOND_OWNER_ID, OWNER_ID2]
 sudo_admin_filter = filters.user(ALLOWED_ADMINS)
 
+# ==== DB ====
+async def get_served_users():
+    return [user async for user in usersdb.find({"user_id": {"$gt": 0}})]
+
+async def get_served_chats():
+    return [chat async for chat in chatsdb.find({"chat_id": {"$lt": 0}})]
+
+# ==== UPTIME ====
+def get_readable_time(seconds: int) -> str:
+    return time.strftime('%Hh:%Mm:%Ss', time.gmtime(seconds))
+
+# ==== STATUS ====
+@app.on_message(filters.command("status") & sudo_admin_filter)
+async def bot_status(_, message: Message):
+    current_time = time.time()
+    uptime = get_readable_time(int(current_time - START_TIME))
+    memory = psutil.virtual_memory()
+    cpu = psutil.cpu_percent()
+
+    users = await get_served_users()
+    chats = await get_served_chats()
+
+    await message.reply_text(
+        f"🔧 <b>Bot Status</b>\n\n"
+        f"⏱ Uptime: <code>{uptime}</code>\n"
+        f"👤 Served Users: <code>{len(users)}</code>\n"
+        f"💬 Served Chats: <code>{len(chats)}</code>\n"
+        f"💾 RAM Usage: <code>{memory.percent}%</code>\n"
+        f"⚙ CPU Usage: <code>{cpu}%</code>"
+    )
+
+
+# ==== RESTART ====
+@app.on_message(filters.command("restart") & sudo_admin_filter)
+async def restart_bot(_, message: Message):
+    await message.reply("♻️ Restarting...")
+
+    if LOG_GROUP_ID:
+        try:
+            await app.send_message(LOG_GROUP_ID, "♻️ <b>Bot is restarting...</b>")
+        except Exception:
+            pass
+
+    await app.stop()
+    os.execl(sys.executable, sys.executable, *sys.argv)
+
+# ==== SHUTDOWN ====
+@app.on_message(filters.command("shutdown") & sudo_admin_filter)
+async def shutdown_bot(_, message: Message):
+    await message.reply("🛑 Shutting down...")
+
+    if LOG_GROUP_ID:
+        try:
+            await app.send_message(LOG_GROUP_ID, "🛑 <b>Bot has been shut down!</b>")
+        except Exception:
+            pass
+
+    await app.stop()
+    os.kill(os.getpid(), signal.SIGTERM)
 
 # ==== BROADCAST ====
 @app.on_message(filters.command("broadcast") & sudo_admin_filter)
 async def broadcast_command(client: Client, message: Message):
-    command_text = message.text.lower()
-    mode = "forward" if "-forward" in command_text else "copy"
+    from_text = message.text.lower()
+    mode = "forward" if "-forward" in from_text else "copy"
 
-    if "-all" in command_text:
+    if "-all" in from_text:
         target_users = [doc["user_id"] for doc in await get_served_users()]
         target_chats = [doc["chat_id"] for doc in await get_served_chats()]
-    elif "-users" in command_text:
+    elif "-users" in from_text:
         target_users = [doc["user_id"] for doc in await get_served_users()]
         target_chats = []
-    elif "-chats" in command_text:
+    elif "-chats" in from_text:
         target_chats = [doc["chat_id"] for doc in await get_served_chats()]
         target_users = []
     else:
         return await message.reply_text("Please use a valid tag: -all, -users, -chats")
 
     if not target_chats and not target_users:
-        return await message.reply_text("No targets found for broadcast.")
+        return await message.reply_text("No targets found.")
 
-    content_message = message.reply_to_message or None
-    if not content_message:
-        stripped_text = command_text
+    content = message.reply_to_message or None
+    if not content:
+        msg_txt = from_text.replace("/broadcast", "")
         for tag in ["-all", "-users", "-chats", "-forward"]:
-            stripped_text = stripped_text.replace(tag, "")
-        stripped_text = stripped_text.replace("/broadcast", "").strip()
+            msg_txt = msg_txt.replace(tag, "")
+        msg_txt = msg_txt.strip()
+        if not msg_txt:
+            return await message.reply_text("Provide a message or reply to one.")
+        content = msg_txt
 
-        if not stripped_text:
-            return await message.reply_text("Please provide a message or reply to one.")
-        content_message = stripped_text
-
+    sent = failed = 0
+    sent_users = sent_chats = 0
+    total = len(target_users) + len(target_chats)
     start_time = time.time()
-    sent_count = failed_count = 0
-    sent_to_users = sent_to_chats = 0
 
-    targets = target_chats + target_users
-    total_targets = len(targets)
+    status_msg = await message.reply("Broadcast started...")
 
-    status_msg = await message.reply_text(f"Broadcast started in `{mode}` mode...\n\nProgress: `0%`")
-
-    async def send_with_retries(chat_id):
-        nonlocal sent_count, failed_count, sent_to_users, sent_to_chats
-        for _ in range(MAX_RETRIES):
+    async def send(chat_id):
+        nonlocal sent, failed, sent_users, sent_chats
+        for _ in range(2):
             try:
-                if isinstance(content_message, str):
-                    await client.send_message(chat_id, content_message)
+                if isinstance(content, str):
+                    await client.send_message(chat_id, content)
                 else:
                     if mode == "forward":
-                        await client.forward_messages(
-                            chat_id=chat_id,
-                            from_chat_id=message.chat.id,
-                            message_ids=content_message.id
-                        )
+                        await client.forward_messages(chat_id, message.chat.id, content.id)
                     else:
-                        await content_message.copy(chat_id)
-                sent_count += 1
+                        await content.copy(chat_id)
+
+                sent += 1
                 if chat_id in target_users:
-                    sent_to_users += 1
+                    sent_users += 1
                 else:
-                    sent_to_chats += 1
+                    sent_chats += 1
                 return
             except FloodWait as e:
                 await asyncio.sleep(e.value)
             except RPCError:
                 await asyncio.sleep(0.5)
-        failed_count += 1
+        failed += 1
 
-    async def broadcast_targets(target_list):
-        for i in range(0, len(target_list), BATCH_SIZE):
-            batch = target_list[i:i + BATCH_SIZE]
-            tasks = [send_with_retries(chat_id) for chat_id in batch]
-            for j in range(0, len(tasks), REQUEST_LIMIT):
-                await asyncio.gather(*tasks[j:j+REQUEST_LIMIT])
-            await asyncio.sleep(BATCH_DELAY)
+    async def batch_send(targets):
+        BATCH_SIZE = 500
+        for i in range(0, len(targets), BATCH_SIZE):
+            batch = targets[i:i + BATCH_SIZE]
+            await asyncio.gather(*[send(chat_id) for chat_id in batch])
+            await asyncio.sleep(2)
 
-            percent = round((sent_count + failed_count) / total_targets * 100, 2)
-            elapsed = time.time() - start_time
-            eta = (elapsed / (sent_count + failed_count)) * (total_targets - (sent_count + failed_count)) if (sent_count + failed_count) else 0
-            eta_formatted = f"{int(eta//60)}m {int(eta%60)}s"
-            bar = f"[{'█' * int(percent//5)}{'░' * (20-int(percent//5))}]"
-
+            percent = round((sent + failed) / total * 100, 2)
+            eta = (time.time() - start_time) / (sent + failed) * (total - (sent + failed)) if (sent + failed) else 0
+            bar = f"[{'█' * int(percent // 5)}{'░' * (20 - int(percent // 5))}]"
             await status_msg.edit_text(
-                f"<b>🔔 Broadcast Progress:</b>\n"
+                f"<b>📡 Broadcast Progress</b>\n\n"
                 f"{bar} <code>{percent}%</code>\n"
-                f"✅ Sent: <code>{sent_count}</code> 🟢\n"
-                f"⛔ Failed: <code>{failed_count}</code> 🔴\n"
-                f"🕰 ETA: <code>{eta_formatted}</code> ⏳"
+                f"✅ Sent: <code>{sent}</code>\n"
+                f"❌ Failed: <code>{failed}</code>\n"
+                f"⏱ ETA: <code>{int(eta)}s</code>"
             )
 
-    await broadcast_targets(targets)
+    await batch_send(target_users + target_chats)
 
-    total_time = round(time.time() - start_time, 2)
+    end = time.time() - start_time
     await status_msg.edit_text(
-        f"<b>✅ Broadcast Report 📢</b>\n\n"
+        f"<b>✅ Broadcast Complete</b>\n\n"
         f"Mode: <code>{mode}</code>\n"
-        f"Total Targets: <code>{total_targets}</code>\n"
-        f"Successful: <code>{sent_count}</code> 🟢\n"
-        f"  ├─ Users: <code>{sent_to_users}</code>\n"
-        f"  └─ Chats: <code>{sent_to_chats}</code>\n"
-        f"Failed: <code>{failed_count}</code> 🔴\n"
-        f"Time Taken: <code>{total_time}</code> seconds ⏰"
+        f"Sent: <code>{sent}</code>\n"
+        f"Failed: <code>{failed}</code>\n"
+        f"Users: <code>{sent_users}</code>\n"
+        f"Chats: <code>{sent_chats}</code>\n"
+        f"Duration: <code>{int(end)}s</code>"
     )
 
 # ==== RUN ====
 if __name__ == "__main__":
-    print(">> Starting Broadcast Bot...")
+    print(">> Bot Running...")
     app.run()
