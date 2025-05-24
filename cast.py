@@ -1,3 +1,4 @@
+import platform 
 import os
 import time
 import asyncio
@@ -16,8 +17,7 @@ API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 MONGO_DB_URI = os.getenv("MONGO_DB_URI")
-LOG_GROUP_ID = int(os.getenv("LOG_GROUP_ID", "-1002144355688"))
-
+LOGGER_GROUP_ID = -1002144355688
 # ==== INIT ====
 app = Client("BroadcastBot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 mongo_client = AsyncIOMotorClient(MONGO_DB_URI)
