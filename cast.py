@@ -54,19 +54,19 @@ async def status_command(client: Client, message: Message):
     served_chats = await chatsdb.count_documents({})
 
     text = (
-        f"<b>🤖 Bot Status</b>"
+        f"<b>🤖 Bot Status</b>\n\n"
 
-        f"👥 Users: <code>{served_users}</code>"
+        f"👥 Users: <code>{served_users}</code>\n"
 
-        f"👨‍👩‍👧‍👦 Chats: <code>{served_chats}</code>"
+        f"👨‍👩‍👧‍👦 Chats: <code>{served_chats}</code>\n\n"
 
-        f"⚙️ Platform: <code>{platform.system()} {platform.release()}</code>"
+        f"⚙️ Platform: <code>{platform.system()} {platform.release()}</code>\n"
 
-        f"📦 Python: <code>{platform.python_version()}</code>"
+        f"📦 Python: <code>{platform.python_version()}</code>\n"
 
-        f"⏱ Uptime: <code>{uptime}</code>"
+        f"⏱ Uptime: <code>{uptime}</code>\n"
 
-        f"🧠 Memory Usage: <code>{psutil.virtual_memory().percent}%</code>"
+        f"🧠 Memory Usage: <code>{psutil.virtual_memory().percent}%</code>\n"
     )
 
     await message.reply_text(text)
@@ -173,34 +173,34 @@ async def broadcast_command(client: Client, message: Message):
             eta = (time.time() - start_time) / (sent + failed) * (total - (sent + failed)) if (sent + failed) else 0
             bar = f"[{'█' * int(percent // 5)}{'░' * (20 - int(percent // 5))}]"
             await status_msg.edit_text(
-                f"<b>📡 Broadcast Progress</b>"
+                f"<b>📡 Broadcast Progress</b>\n\n"
 
-                f"{bar} <code>{percent}%</code>"
+                f"{bar} <code>{percent}%</code>\n"
 
-                f"✅ Sent: <code>{sent}</code>"
+                f"✅ Sent: <code>{sent}</code>\n"
 
-                f"❌ Failed: <code>{failed}</code>"
+                f"❌ Failed: <code>{failed}</code>\n"
 
-                f"⏱ ETA: <code>{int(eta)}s</code>"
+                f"⏱ ETA: <code>{int(eta)}s</code>\n"
             )
 
     await batch_send(target_users + target_chats)
 
     end = time.time() - start_time
     await status_msg.edit_text(
-        f"<b>✅ Broadcast Complete</b>"
+        f"<b>✅ Broadcast Complete</b>\n\n"
 
-        f"Mode: <code>{mode}</code>"
+        f"Mode: <code>{mode}</code>\n"
 
-        f"Sent: <code>{sent}</code>"
+        f"Sent: <code>{sent}</code>\n"
 
-        f"Failed: <code>{failed}</code>"
+        f"Failed: <code>{failed}</code>\n"
 
-        f"Users: <code>{sent_users}</code>"
+        f"Users: <code>{sent_users}</code>\n"
 
-        f"Chats: <code>{sent_chats}</code>"
+        f"Chats: <code>{sent_chats}</code>\n"
 
-        f"Duration: <code>{int(end)}s</code>"
+        f"Duration: <code>{int(end)}s</code>\n"
     )
 
     await broadcast_logs.insert_one({
